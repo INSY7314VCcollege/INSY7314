@@ -4,17 +4,24 @@ A comprehensive, bank-grade secure international payments portal built with Reac
 
 ## 🏦 Project Overview
 
-This project is Part 2 of a Portfolio of Evidence assignment worth 80 marks, focusing on developing a secure customer portal and API for international banking payments. The system allows customers to register, log in, and make international payments securely, while bank employees can later verify and forward transactions to SWIFT.
+This project is a Portfolio of Evidence assignment focusing on developing a secure customer and employee portal for international banking payments. The system allows customers to register, log in, and make international payments securely, while bank employees can verify, approve, and forward transactions to SWIFT.
 
 ## ✨ Features
 
 ### Customer Portal
 - **Secure Registration**: Full name, ID number, account number, and password with strong validation
 - **Multi-Factor Authentication**: Username, account number, and password login
-- **International Payments**: Amount entry, currency selection, SWIFT provider integration
+- **International Payments**: Amount entry with currency selection (USD, EUR, GBP, ZAR)
 - **Transaction Management**: View payment history, status tracking, and transaction details
 - **Profile Management**: Update personal information and security settings
 - **Real-time Security Monitoring**: Connection status, password strength, and security recommendations
+
+### Employee Portal (Task 3)
+- **Employee Authentication**: Secure login with employee ID, username, and password
+- **Transaction Verification**: View and verify pending payment transactions
+- **Transaction Management**: Approve, reject, or forward transactions to SWIFT
+- **Dashboard Analytics**: View transaction statistics and status overview
+- **Secure Access Control**: Role-based access with employee-specific authentication
 
 ### Security Features
 - **Password Security**: Argon2 hashing with unique salts, strong password policies
@@ -70,24 +77,31 @@ This project is Part 2 of a Portfolio of Evidence assignment worth 80 marks, foc
 
 3. **Set up environment variables**
    ```bash
-   cp env.example .env
-   # Edit .env with your configuration
+   cp .env.example .env
+   # Edit .env with your MongoDB connection and JWT secret
    ```
 
 4. **Set up the database**
    ```bash
-   # Start MongoDB service
+   # Start MongoDB service (Windows)
    net start MongoDB
+   
+   # Or on Linux/Mac
+   sudo systemctl start mongod
    
    # Verify connection
    mongosh --eval "db.runCommand('ping')"
    ```
 
-5. **Generate SSL certificates (for development)**
+5. **Create demo employee (optional)**
    ```bash
-   chmod +x scripts/generate-ssl-certs.sh
-   ./scripts/generate-ssl-certs.sh
+   node scripts/create-demo-employee.js
    ```
+   
+   Demo credentials:
+   - Username: `jsmith`
+   - Employee ID: `EMP001`
+   - Password: `Demo123!@#`
 
 6. **Start the development servers**
    ```bash
@@ -95,9 +109,10 @@ This project is Part 2 of a Portfolio of Evidence assignment worth 80 marks, foc
    ```
 
 The application will be available at:
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:3001
-- HTTPS: https://localhost:3443
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://localhost:3001
+- **Customer Portal**: http://localhost:3000
+- **Employee Portal**: http://localhost:3000/employee/login
 
 ## 🔐 Security Implementation
 
@@ -218,6 +233,20 @@ npm run lint
 - `GET /api/payments/transactions` - Get transactions
 - `GET /api/payments/transactions/:id` - Get transaction details
 - `PUT /api/payments/transactions/:id/cancel` - Cancel transaction
+- `GET /api/payments/currencies` - Get supported currencies
+- `GET /api/payments/limits` - Get payment limits and fees
+
+### Employee Endpoints
+- `POST /api/employees/login` - Employee login
+- `POST /api/employees/logout` - Employee logout
+- `POST /api/employees/refresh` - Refresh employee token
+- `GET /api/employees/me` - Get current employee
+- `GET /api/employees/transactions` - Get transactions for verification
+- `GET /api/employees/transactions/:id` - Get transaction details
+- `POST /api/employees/transactions/:id/verify` - Verify transaction
+- `POST /api/employees/transactions/:id/reject` - Reject transaction
+- `POST /api/employees/transactions/:id/submit-swift` - Submit to SWIFT
+- `GET /api/employees/statistics` - Get transaction statistics
 
 ### User Endpoints
 - `GET /api/users/profile` - Get user profile
@@ -314,4 +343,4 @@ For support and questions:
 
 ---
 
-**⚠️ Security Notice**: This application implements industry-standard security practices. Always use HTTPS in production and keep dependencies updated. Regular security audits are recommended.
+

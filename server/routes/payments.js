@@ -9,6 +9,28 @@ const Joi = require('joi');
 
 const router = express.Router();
 
+// Import rate limiter for payment endpoint
+const rateLimit = require('express-rate-limit');
+
+const paymentLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: process.env.NODE_ENV === 'development' ? 20 : 10, // More permissive in development
+  message: {
+    error: 'Too many payment attempts, please wait before trying again.',
+    retryAfter: 60
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    // Key by user ID if authenticated, otherwise by IP
+    if (req.user && req.user.id) {
+      return `user_${req.user.id.toString()}`;
+    }
+    return `ip_${req.ip}`;
+  },
+  skipSuccessfulRequests: true // Only count failed attempts
+});
+
 /**
  * @route   POST /api/payments/make-payment
  * @desc    Create a new payment transaction
@@ -16,6 +38,7 @@ const router = express.Router();
  */
 router.post('/make-payment',
   auth,
+  paymentLimiter,
   sensitiveOperationAuth,
   asyncHandler(async (req, res) => {
     const {
@@ -31,7 +54,7 @@ router.post('/make-payment',
       reference
     } = req.body;
 
-    const userId = req.user.id;
+    const userId = req.user._id || req.user.id;
 
     // Additional validation
     const amountNum = parseFloat(amount);
@@ -51,16 +74,10 @@ router.post('/make-payment',
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    const todayTransactions = await Transaction.findAll({
-      where: {
-        userId,
-        status: {
-          [Transaction.sequelize.Sequelize.Op.in]: ['PENDING', 'VERIFIED', 'PROCESSING', 'COMPLETED']
-        },
-        createdAt: {
-          [Transaction.sequelize.Sequelize.Op.between]: [today, tomorrow]
-        }
-      }
+    const todayTransactions = await Transaction.find({
+      userId,
+      status: { $in: ['PENDING', 'VERIFIED', 'PROCESSING', 'COMPLETED'] },
+      createdAt: { $gte: today, $lt: tomorrow }
     });
 
     const todayTotal = todayTransactions.reduce((sum, tx) => sum + parseFloat(tx.amount), 0);
@@ -83,6 +100,9 @@ router.post('/make-payment',
       fees = 50.00; // $50 for amounts over $10,000
     }
 
+    // Calculate total amount (amount + fees)
+    const totalAmount = amountNum + fees;
+
     // Create transaction
     const transaction = await Transaction.create({
       userId,
@@ -91,12 +111,14 @@ router.post('/make-payment',
       provider: provider || 'SWIFT',
       recipientName,
       recipientAccountNumber,
+      recipientBankCode: swiftCode, // Use SWIFT code as bank code (required field)
       swiftCode,
       recipientBankName,
       recipientBankAddress: recipientBankAddress || null,
       purpose: purpose || null,
       reference: reference || null,
       fees,
+      totalAmount, // Explicitly set totalAmount to avoid validation error
       ipAddress: req.ip,
       userAgent: req.get('User-Agent'),
       metadata: {
@@ -108,7 +130,7 @@ router.post('/make-payment',
 
     // Log payment creation
     auditLogger.logPaymentEvent('PAYMENT_CREATED', req, {
-      transactionId: transaction.id,
+      transactionId: transaction._id || transaction.id,
       amount: transaction.amount,
       currency: transaction.currency,
       recipientName: transaction.recipientName,
@@ -120,7 +142,7 @@ router.post('/make-payment',
       message: 'Payment transaction created successfully',
       data: {
         transaction: {
-          id: transaction.id,
+          id: transaction._id || transaction.id,
           amount: transaction.amount,
           currency: transaction.currency,
           provider: transaction.provider,
@@ -149,24 +171,25 @@ router.post('/make-payment',
 router.get('/transactions',
   auth,
   asyncHandler(async (req, res) => {
-    const userId = req.user.id;
+    const userId = req.user._id || req.user.id;
     const page = parseInt(req.query.page) || 1;
     const limit = Math.min(parseInt(req.query.limit) || 20, 100); // Max 100 per page
-    const offset = (page - 1) * limit;
+    const skip = (page - 1) * limit;
     const status = req.query.status;
 
-    const whereClause = { userId };
+    const query = { userId };
     if (status) {
-      whereClause.status = status;
+      query.status = status;
     }
 
-    const { count, rows: transactions } = await Transaction.findAndCountAll({
-      where: whereClause,
-      limit,
-      offset,
-      order: [['createdAt', 'DESC']],
-      attributes: { exclude: ['metadata'] } // Exclude sensitive metadata
-    });
+    const [transactions, count] = await Promise.all([
+      Transaction.find(query)
+        .select('-metadata') // Exclude sensitive metadata
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .skip(skip),
+      Transaction.countDocuments(query)
+    ]);
 
     // Log data access
     auditLogger.logDataAccess('TRANSACTIONS_ACCESSED', req, 'transactions', {
@@ -200,13 +223,11 @@ router.get('/transactions/:id',
   auth,
   asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const userId = req.user.id;
+    const userId = req.user._id || req.user.id;
 
     const transaction = await Transaction.findOne({
-      where: {
-        id,
-        userId
-      }
+      _id: id,
+      userId
     });
 
     if (!transaction) {
@@ -226,7 +247,7 @@ router.get('/transactions/:id',
       success: true,
       data: {
         transaction: {
-          id: transaction.id,
+          id: transaction._id || transaction.id,
           amount: transaction.amount,
           currency: transaction.currency,
           provider: transaction.provider,
@@ -262,13 +283,11 @@ router.put('/transactions/:id/cancel',
   auth,
   asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const userId = req.user.id;
+    const userId = req.user._id || req.user.id;
 
     const transaction = await Transaction.findOne({
-      where: {
-        id,
-        userId
-      }
+      _id: id,
+      userId
     });
 
     if (!transaction) {
@@ -289,7 +308,7 @@ router.put('/transactions/:id/cancel',
 
     // Log cancellation
     auditLogger.logPaymentEvent('PAYMENT_CANCELLED', req, {
-      transactionId: transaction.id,
+      transactionId: transaction._id || transaction.id,
       amount: transaction.amount,
       currency: transaction.currency
     });
@@ -299,7 +318,7 @@ router.put('/transactions/:id/cancel',
       message: 'Transaction cancelled successfully',
       data: {
         transaction: {
-          id: transaction.id,
+          id: transaction._id || transaction.id,
           status: transaction.status
         }
       }
@@ -367,7 +386,7 @@ router.get('/limits',
         upTo10000: 25.00,
         over10000: 50.00
       },
-      supportedCurrencies: inputValidation.supportedCurrencies
+      supportedCurrencies: inputValidation.supportedCurrencies || ['USD', 'EUR', 'GBP', 'ZAR', 'JPY', 'CAD', 'AUD', 'CHF', 'SEK', 'NOK']
     };
 
     res.json({
@@ -388,7 +407,9 @@ router.post('/validate-swift',
 
     // In a real implementation, you would validate against a SWIFT code database
     // For now, we'll do basic pattern validation
-    const isValid = inputValidation.patterns.swiftCode.test(swiftCode);
+    const isValid = inputValidation && inputValidation.patterns && inputValidation.patterns.swiftCode
+      ? inputValidation.patterns.swiftCode.test(swiftCode)
+      : /^[A-Z]{6}[A-Z0-9]{2,5}$/.test(swiftCode);
 
     if (!isValid) {
       return res.status(400).json({
