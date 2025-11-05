@@ -1,20 +1,21 @@
 version: 2.1
 
 executors:
-  # Define executor with Docker image
+  # Define executor using the Node.js Docker image
   node-executor:
     docker:
-      - image: cimg/node:20.17  # Use an appropriate Node.js Docker image
+      - image: cimg/node:20.17  # Use the latest Node.js image
     working_directory: ~/project
 
 jobs:
-  # Define the job that will run the SonarQube analysis
+  # Job that will install dependencies, run tests, and perform SonarCloud analysis
   test-and-sonar:
     executor: node-executor
     steps:
-      - checkout  # Check out the code from GitHub
+      # Step 1: Checkout the code from GitHub
+      - checkout
 
-      # Install dependencies for the frontend
+      # Step 2: Install frontend dependencies
       - restore_cache:
           keys:
             - v1-frontend-deps-{{ checksum "frontend/package-lock.json" }}
@@ -25,7 +26,7 @@ jobs:
             cd frontend
             npm ci
 
-      # Install dependencies for the API
+      # Step 3: Install API dependencies
       - restore_cache:
           keys:
             - v1-api-deps-{{ checksum "api/package-lock.json" }}
@@ -36,21 +37,21 @@ jobs:
             cd api
             npm ci
 
-      # Run tests for the frontend
+      # Step 4: Run frontend tests
       - run:
           name: Run frontend tests
           command: |
             cd frontend
             npm run test:ci || npm run test:ci --if-present
 
-      # Run tests for the API
+      # Step 5: Run API tests
       - run:
           name: Run API tests
           command: |
             cd api
             npm run test:ci || npm run test:ci --if-present
 
-      # Install SonarScanner
+      # Step 6: Install SonarScanner for SonarCloud analysis
       - run:
           name: Install SonarScanner
           command: |
@@ -62,15 +63,16 @@ jobs:
             echo 'export PATH="$PWD/sonar-scanner/bin:$PATH"' >> $BASH_ENV
             source $BASH_ENV
 
-      # Run SonarQube analysis
+      # Step 7: Run SonarCloud analysis
       - run:
-          name: SonarQube analysis
+          name: Run SonarCloud analysis
           command: |
             sonar-scanner \
               -Dsonar.host.url="$SONAR_HOST_URL" \
-              -Dsonar.login="$SONAR_TOKEN"
-
-# Define workflows to run jobs in sequence
+              -Dsonar.login="$SONAR_TOKEN" \
+              -Dsonar.projectKey="$CIRCLE_PROJECT_REPONAME" \
+              -Dsonar.organization="INSY7314VCcollege"
+              
 workflows:
   version: 2
   build_and_scan:
