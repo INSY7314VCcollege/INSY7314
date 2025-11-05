@@ -18,6 +18,7 @@ require('dotenv').config();
 const authRoutes = require('./routes/auth');
 const paymentRoutes = require('./routes/payments');
 const userRoutes = require('./routes/users');
+const employeeRoutes = require('./routes/employees');
 const { errorHandler } = require('./middleware/errorHandler');
 const { securityHeaders } = require('./middleware/securityHeaders');
 const { inputValidation } = require('./middleware/inputValidation');
@@ -78,13 +79,28 @@ const authLimiter = rateLimit({
 
 const paymentLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 3, // 3 payment attempts per minute
+  max: process.env.NODE_ENV === 'development' ? 20 : 10, // More permissive in development
   message: {
     error: 'Too many payment attempts, please wait before trying again.',
     retryAfter: 60
   },
   standardHeaders: true,
-  legacyHeaders: false
+  legacyHeaders: false,
+  skip: (req) => {
+    // Skip rate limiting for health checks
+    return req.path === '/health';
+  },
+  // Key by user ID if authenticated, otherwise by IP
+  keyGenerator: (req) => {
+    // Wait for authentication middleware to run
+    // Use a combination of user ID and IP for better tracking
+    if (req.user && req.user.id) {
+      return `user_${req.user.id.toString()}`;
+    }
+    return `ip_${req.ip}`;
+  },
+  // Skip successful requests from rate limit count (only count failures)
+  skipSuccessfulRequests: true
 });
 
 // Security middleware
@@ -191,8 +207,9 @@ app.use((req, res, next) => {
 
 // Routes with specific rate limiting
 app.use('/api/auth', authLimiter, authRoutes);
-app.use('/api/payments', paymentLimiter, paymentRoutes);
+app.use('/api/payments', paymentRoutes); // Rate limiting applied per route in payments.js
 app.use('/api/users', userRoutes);
+app.use('/api/employees', authLimiter, employeeRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

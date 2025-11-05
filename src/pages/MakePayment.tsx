@@ -2,12 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSecurity } from '../contexts/SecurityContext';
 import { paymentAPI } from '../services/api';
-import { PaymentData, Currency, PaymentProvider, PaymentLimits } from '../types/payment';
+import { PaymentData, Currency, PaymentLimits } from '../types/payment';
 import { 
   ArrowLeft, 
   AlertTriangle, 
   CheckCircle,
-  DollarSign,
   Building,
   User,
   FileText
@@ -22,7 +21,7 @@ const MakePayment: React.FC = () => {
   const [formData, setFormData] = useState<PaymentData>({
     amount: '',
     currency: 'USD',
-    provider: 'SWIFT',
+    provider: 'SWIFT', // Default provider, not shown to user
     recipientName: '',
     recipientAccountNumber: '',
     swiftCode: '',
@@ -32,8 +31,14 @@ const MakePayment: React.FC = () => {
     reference: '',
   });
   
-  const [currencies, setCurrencies] = useState<Currency[]>([]);
-  const [providers, setProviders] = useState<PaymentProvider[]>([]);
+  // Supported currencies: EUR, USD, GBP, ZAR
+  const supportedCurrencies: Currency[] = [
+    { code: 'USD', name: 'US Dollar', symbol: '$' },
+    { code: 'EUR', name: 'Euro', symbol: '€' },
+    { code: 'GBP', name: 'British Pound', symbol: '£' },
+    { code: 'ZAR', name: 'South African Rand', symbol: 'R' }
+  ];
+  
   const [limits, setLimits] = useState<PaymentLimits | null>(null);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [isLoading, setIsLoading] = useState(true);
@@ -45,20 +50,8 @@ const MakePayment: React.FC = () => {
       try {
         setIsLoading(true);
         
-        // Load currencies, providers, and limits in parallel
-        const [currenciesRes, providersRes, limitsRes] = await Promise.all([
-          paymentAPI.getCurrencies(),
-          paymentAPI.getProviders(),
-          paymentAPI.getLimits(),
-        ]);
-        
-        if (currenciesRes.success) {
-          setCurrencies(currenciesRes.data.currencies);
-        }
-        
-        if (providersRes.success) {
-          setProviders(providersRes.data.providers);
-        }
+        // Load limits only (currencies are hardcoded, provider is removed)
+        const limitsRes = await paymentAPI.getLimits();
         
         if (limitsRes.success) {
           setLimits(limitsRes.data.limits);
@@ -233,7 +226,7 @@ const MakePayment: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Payment Form */}
         <div className="lg:col-span-2">
-          <div className="form-container">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Amount and Currency */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -241,22 +234,16 @@ const MakePayment: React.FC = () => {
                   <label htmlFor="amount" className="block text-sm font-medium text-gray-700">
                     Amount *
                   </label>
-                  <div className="mt-1 relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <DollarSign className="h-5 w-5 text-gray-400" />
-                    </div>
-                    <input
-                      type="text"
-                      id="amount"
-                      name="amount"
-                      value={formData.amount}
-                      onChange={handleInputChange}
-                      className={`block w-full pl-10 pr-3 py-2 border ${
-                        errors.amount ? 'border-red-300' : 'border-gray-300'
-                      } rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm`}
-                      placeholder="0.00"
-                    />
-                  </div>
+                  <input
+                    type="text"
+                    id="amount"
+                    name="amount"
+                    value={formData.amount}
+                    onChange={handleInputChange}
+                    className={`mt-1 block w-full px-3 py-2 border ${
+                      errors.amount ? 'border-red-300' : 'border-gray-300'
+                    } rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm`}
+                  />
                   {errors.amount && (
                     <p className="mt-1 text-sm text-red-600">{errors.amount}</p>
                   )}
@@ -275,9 +262,9 @@ const MakePayment: React.FC = () => {
                       errors.currency ? 'border-red-300' : 'border-gray-300'
                     } rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm`}
                   >
-                    {currencies.map((currency) => (
+                    {supportedCurrencies.map((currency) => (
                       <option key={currency.code} value={currency.code}>
-                        {currency.code} - {currency.name}
+                        {currency.code} - {currency.name} ({currency.symbol})
                       </option>
                     ))}
                   </select>
@@ -285,26 +272,6 @@ const MakePayment: React.FC = () => {
                     <p className="mt-1 text-sm text-red-600">{errors.currency}</p>
                   )}
                 </div>
-              </div>
-
-              {/* Provider */}
-              <div className="input-field">
-                <label htmlFor="provider" className="block text-sm font-medium text-gray-700">
-                  Payment Provider
-                </label>
-                <select
-                  id="provider"
-                  name="provider"
-                  value={formData.provider}
-                  onChange={handleInputChange}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                >
-                  {providers.map((provider) => (
-                    <option key={provider.code} value={provider.code}>
-                      {provider.name}
-                    </option>
-                  ))}
-                </select>
               </div>
 
               {/* Recipient Information */}

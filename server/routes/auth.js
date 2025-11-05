@@ -235,7 +235,8 @@ router.post('/refresh',
       }
 
       // Check if user still exists and is active
-      const user = await User.findByPk(decoded.userId);
+      const userId = decoded.userId || decoded.id;
+      const user = await User.findById(userId);
       if (!user || !user.isActive) {
         return res.status(401).json({
           success: false,
@@ -297,9 +298,7 @@ router.post('/logout', auth, asyncHandler(async (req, res) => {
  * @access  Private
  */
 router.get('/me', auth, asyncHandler(async (req, res) => {
-  const user = await User.findByPk(req.user.id, {
-    attributes: { exclude: ['passwordHash', 'salt', 'twoFactorSecret'] }
-  });
+  const user = await User.findById(req.user._id || req.user.id).select('-passwordHash -salt -twoFactorSecret');
 
   if (!user) {
     return res.status(404).json({

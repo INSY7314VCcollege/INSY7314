@@ -1,6 +1,7 @@
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import { AuthResponse, RegisterData } from '../types/auth';
 import { PaymentData, PaymentResponse, TransactionsResponse, Currency, PaymentProvider, PaymentLimits } from '../types/payment';
+import { EmployeeAuthResponse, TransactionStatistics } from '../types/employee';
 
 // Create axios instance with default config
 const createAPIInstance = (): AxiosInstance => {
@@ -15,7 +16,11 @@ const createAPIInstance = (): AxiosInstance => {
   // Request interceptor to add auth token
   instance.interceptors.request.use(
     (config) => {
-      const token = localStorage.getItem('authToken');
+      // Check if this is an employee route
+      const isEmployeeRoute = config.url?.includes('/employees');
+      const token = isEmployeeRoute 
+        ? localStorage.getItem('employeeToken') 
+        : localStorage.getItem('authToken');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
@@ -37,13 +42,26 @@ const createAPIInstance = (): AxiosInstance => {
         originalRequest._retry = true;
 
         try {
-          const refreshToken = localStorage.getItem('refreshToken');
+          const isEmployeeRoute = originalRequest.url?.includes('/employees');
+          const refreshToken = isEmployeeRoute
+            ? localStorage.getItem('employeeRefreshToken')
+            : localStorage.getItem('refreshToken');
+          
           if (refreshToken) {
-            const response = await authAPI.refreshToken(refreshToken);
+            const response = isEmployeeRoute
+              ? await employeeAPI.refreshToken(refreshToken)
+              : await authAPI.refreshToken(refreshToken);
+              
             if (response.success && response.data) {
               const { token, refreshToken: newRefreshToken } = response.data;
-              localStorage.setItem('authToken', token);
-              localStorage.setItem('refreshToken', newRefreshToken);
+              
+              if (isEmployeeRoute) {
+                localStorage.setItem('employeeToken', token);
+                localStorage.setItem('employeeRefreshToken', newRefreshToken);
+              } else {
+                localStorage.setItem('authToken', token);
+                localStorage.setItem('refreshToken', newRefreshToken);
+              }
               
               // Retry original request with new token
               originalRequest.headers.Authorization = `Bearer ${token}`;
@@ -51,11 +69,19 @@ const createAPIInstance = (): AxiosInstance => {
             }
           }
         } catch (refreshError) {
-          // Refresh failed, redirect to login
-          localStorage.removeItem('authToken');
-          localStorage.removeItem('refreshToken');
-          localStorage.removeItem('user');
-          window.location.href = '/login';
+          // Refresh failed, redirect to appropriate login
+          const isEmployeeRoute = originalRequest.url?.includes('/employees');
+          if (isEmployeeRoute) {
+            localStorage.removeItem('employeeToken');
+            localStorage.removeItem('employeeRefreshToken');
+            localStorage.removeItem('employee');
+            window.location.href = '/employee/login';
+          } else {
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('refreshToken');
+            localStorage.removeItem('user');
+            window.location.href = '/login';
+          }
         }
       }
 
@@ -226,6 +252,74 @@ export const userAPI = {
 export const healthAPI = {
   check: async (): Promise<{ status: string; timestamp: string; uptime: number; environment: string }> => {
     const response: AxiosResponse<{ status: string; timestamp: string; uptime: number; environment: string }> = await api.get('/health');
+    return response.data;
+  },
+};
+
+// Employee API
+export const employeeAPI = {
+  login: async (username: string, employeeId: string, password: string): Promise<EmployeeAuthResponse> => {
+    const response: AxiosResponse<EmployeeAuthResponse> = await api.post('/employees/login', {
+      username,
+      employeeId,
+      password,
+    });
+    return response.data;
+  },
+
+  logout: async (): Promise<{ success: boolean }> => {
+    const response: AxiosResponse<{ success: boolean }> = await api.post('/employees/logout');
+    return response.data;
+  },
+
+  refreshToken: async (refreshToken: string): Promise<EmployeeAuthResponse> => {
+    const response: AxiosResponse<EmployeeAuthResponse> = await api.post('/employees/refresh', {
+      refreshToken,
+    });
+    return response.data;
+  },
+
+  getCurrentEmployee: async (): Promise<{ success: boolean; data?: { employee: any } }> => {
+    const response: AxiosResponse<{ success: boolean; data?: { employee: any } }> = await api.get('/employees/me');
+    return response.data;
+  },
+
+  getTransactions: async (page: number = 1, limit: number = 20, status?: string): Promise<TransactionsResponse> => {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      limit: limit.toString(),
+    });
+    
+    if (status) {
+      params.append('status', status);
+    }
+
+    const response: AxiosResponse<TransactionsResponse> = await api.get(`/employees/transactions?${params}`);
+    return response.data;
+  },
+
+  getTransaction: async (id: string): Promise<PaymentResponse> => {
+    const response: AxiosResponse<PaymentResponse> = await api.get(`/employees/transactions/${id}`);
+    return response.data;
+  },
+
+  verifyTransaction: async (id: string, verified: boolean, notes?: string): Promise<{ success: boolean; message?: string; error?: string; data?: any }> => {
+    const response: AxiosResponse<{ success: boolean; message?: string; error?: string; data?: any }> = await api.post(`/employees/transactions/${id}/verify`, {
+      verified,
+      notes,
+    });
+    return response.data;
+  },
+
+  submitToSwift: async (transactionIds: string[]): Promise<{ success: boolean; message?: string; error?: string; data?: any }> => {
+    const response: AxiosResponse<{ success: boolean; message?: string; error?: string; data?: any }> = await api.post('/employees/transactions/submit-to-swift', {
+      transactionIds,
+    });
+    return response.data;
+  },
+
+  getStatistics: async (): Promise<{ success: boolean; data?: { statistics: TransactionStatistics } }> => {
+    const response: AxiosResponse<{ success: boolean; data?: { statistics: TransactionStatistics } }> = await api.get('/employees/statistics');
     return response.data;
   },
 };
