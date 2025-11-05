@@ -92,7 +92,7 @@ const transactionSchema = new mongoose.Schema({
   },
   totalAmount: {
     type: Number,
-    required: [true, 'Total amount is required']
+    required: false // Will be calculated in pre-save hook
   },
   verificationCode: {
     type: String,

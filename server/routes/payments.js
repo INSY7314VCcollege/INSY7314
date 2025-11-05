@@ -103,6 +103,25 @@ router.post('/make-payment',
     // Calculate total amount (amount + fees)
     const totalAmount = amountNum + fees;
 
+    // Validate and normalize SWIFT code
+    if (!swiftCode || typeof swiftCode !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'SWIFT code is required'
+      });
+    }
+
+    // Normalize SWIFT code to uppercase and use as recipientBankCode
+    const normalizedSwiftCode = swiftCode.trim().toUpperCase();
+    
+    // Validate SWIFT code format
+    if (!/^[A-Z]{6}[A-Z0-9]{2,5}$/.test(normalizedSwiftCode)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid SWIFT code format. Must be 8-11 characters: 6 letters followed by 2-5 alphanumeric characters'
+      });
+    }
+
     // Create transaction
     const transaction = await Transaction.create({
       userId,
@@ -111,8 +130,8 @@ router.post('/make-payment',
       provider: provider || 'SWIFT',
       recipientName,
       recipientAccountNumber,
-      recipientBankCode: swiftCode, // Use SWIFT code as bank code (required field)
-      swiftCode,
+      recipientBankCode: normalizedSwiftCode, // Use normalized SWIFT code as bank code
+      swiftCode: normalizedSwiftCode,
       recipientBankName,
       recipientBankAddress: recipientBankAddress || null,
       purpose: purpose || null,

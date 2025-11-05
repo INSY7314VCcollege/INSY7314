@@ -94,13 +94,13 @@ const EmployeeDashboard: React.FC = () => {
     if (selectedTransactions.size === transactions.length) {
       setSelectedTransactions(new Set());
     } else {
-      setSelectedTransactions(new Set(transactions.filter(t => t.status === 'VERIFIED').map(t => t.id)));
+      setSelectedTransactions(new Set(transactions.filter(t => t.status === 'VERIFIED').map(t => getTransactionId(t))));
     }
   };
 
   const handleSubmitToSwift = async () => {
     const verifiedTransactions = Array.from(selectedTransactions).filter(id => {
-      const transaction = transactions.find(t => t.id === id);
+      const transaction = transactions.find(t => getTransactionId(t) === id);
       return transaction?.status === 'VERIFIED';
     });
 
@@ -147,6 +147,13 @@ const EmployeeDashboard: React.FC = () => {
       default:
         return 'bg-gray-100 text-gray-800';
     }
+  };
+
+  const getTransactionId = (transaction: any): string => {
+    const id = transaction.id || transaction._id;
+    if (!id) return '';
+    // Convert ObjectId to string if needed
+    return typeof id === 'string' ? id : id.toString();
   };
 
   if (loading) {
@@ -308,20 +315,22 @@ const EmployeeDashboard: React.FC = () => {
                     </td>
                   </tr>
                 ) : (
-                  transactions.map((transaction: any) => (
-                    <tr key={transaction.id} className="hover:bg-gray-50">
+                  transactions.map((transaction: any) => {
+                    const transactionId = getTransactionId(transaction);
+                    return (
+                    <tr key={transactionId} className="hover:bg-gray-50">
                       {statusFilter === 'VERIFIED' && (
                         <td className="px-6 py-4 whitespace-nowrap">
                           <input
                             type="checkbox"
-                            checked={selectedTransactions.has(transaction.id)}
-                            onChange={() => handleSelectTransaction(transaction.id)}
+                            checked={selectedTransactions.has(transactionId)}
+                            onChange={() => handleSelectTransaction(transactionId)}
                             className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                           />
                         </td>
                       )}
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {transaction.id.substring(0, 8)}...
+                        {transactionId ? transactionId.substring(0, 8) : 'N/A'}...
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {transaction.userId?.fullName || 'N/A'}
@@ -347,7 +356,7 @@ const EmployeeDashboard: React.FC = () => {
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <div className="flex space-x-2">
                             <button
-                              onClick={() => handleVerify(transaction.id, true)}
+                              onClick={() => handleVerify(transactionId, true)}
                               disabled={submitting}
                               className="text-green-600 hover:text-green-900 disabled:opacity-50"
                               title="Verify"
@@ -355,7 +364,7 @@ const EmployeeDashboard: React.FC = () => {
                               <CheckCircle className="h-5 w-5" />
                             </button>
                             <button
-                              onClick={() => handleVerify(transaction.id, false)}
+                              onClick={() => handleVerify(transactionId, false)}
                               disabled={submitting}
                               className="text-red-600 hover:text-red-900 disabled:opacity-50"
                               title="Reject"
@@ -363,7 +372,7 @@ const EmployeeDashboard: React.FC = () => {
                               <XCircle className="h-5 w-5" />
                             </button>
                             <button
-                              onClick={() => navigate(`/employee/transactions/${transaction.id}`)}
+                              onClick={() => navigate(`/employee/transactions/${transactionId}`)}
                               className="text-blue-600 hover:text-blue-900"
                               title="View Details"
                             >
@@ -373,7 +382,8 @@ const EmployeeDashboard: React.FC = () => {
                         </td>
                       )}
                     </tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>
