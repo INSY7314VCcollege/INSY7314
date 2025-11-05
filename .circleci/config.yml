@@ -1,21 +1,18 @@
 version: 2.1
 
 executors:
-  # Define executor using the Node.js Docker image
   node-executor:
     docker:
-      - image: cimg/node:20.17  # Use the latest Node.js image
+      - image: cimg/node:20.17
     working_directory: ~/project
 
 jobs:
-  # Job that will install dependencies, run tests, and perform SonarCloud analysis
   test-and-sonar:
     executor: node-executor
     steps:
-      # Step 1: Checkout the code from GitHub
       - checkout
 
-      # Step 2: Install frontend dependencies
+      # Install frontend dependencies
       - restore_cache:
           keys:
             - v1-frontend-deps-{{ checksum "frontend/package-lock.json" }}
@@ -26,7 +23,7 @@ jobs:
             cd frontend
             npm ci
 
-      # Step 3: Install API dependencies
+      # Install API dependencies
       - restore_cache:
           keys:
             - v1-api-deps-{{ checksum "api/package-lock.json" }}
@@ -37,21 +34,21 @@ jobs:
             cd api
             npm ci
 
-      # Step 4: Run frontend tests
+      # Run frontend tests
       - run:
           name: Run frontend tests
           command: |
             cd frontend
             npm run test:ci || npm run test:ci --if-present
 
-      # Step 5: Run API tests
+      # Run API tests
       - run:
           name: Run API tests
           command: |
             cd api
             npm run test:ci || npm run test:ci --if-present
 
-      # Step 6: Install SonarScanner for SonarCloud analysis
+      # Install SonarScanner
       - run:
           name: Install SonarScanner
           command: |
@@ -63,7 +60,7 @@ jobs:
             echo 'export PATH="$PWD/sonar-scanner/bin:$PATH"' >> $BASH_ENV
             source $BASH_ENV
 
-      # Step 7: Run SonarCloud analysis
+      # Run SonarCloud analysis
       - run:
           name: Run SonarCloud analysis
           command: |
@@ -72,7 +69,7 @@ jobs:
               -Dsonar.login="$SONAR_TOKEN" \
               -Dsonar.projectKey="$CIRCLE_PROJECT_REPONAME" \
               -Dsonar.organization="INSY7314VCcollege"
-              
+
 workflows:
   version: 2
   build_and_scan:
