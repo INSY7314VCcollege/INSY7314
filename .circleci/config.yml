@@ -10,9 +10,10 @@ jobs:
   test-and-sonar:
     executor: node-executor
     steps:
+      # Step 1: Checkout code
       - checkout
 
-      # Install frontend dependencies
+      # Step 2: Install frontend dependencies (adjust paths if you don't have a frontend folder)
       - restore_cache:
           keys:
             - v1-frontend-deps-{{ checksum "frontend/package-lock.json" }}
@@ -23,7 +24,7 @@ jobs:
             cd frontend
             npm ci
 
-      # Install API dependencies
+      # Step 3: Install API dependencies (adjust paths if you don't have an API folder)
       - restore_cache:
           keys:
             - v1-api-deps-{{ checksum "api/package-lock.json" }}
@@ -34,21 +35,21 @@ jobs:
             cd api
             npm ci
 
-      # Run frontend tests
+      # Step 4: Run frontend tests
       - run:
           name: Run frontend tests
           command: |
             cd frontend
             npm run test:ci || npm run test:ci --if-present
 
-      # Run API tests
+      # Step 5: Run API tests
       - run:
           name: Run API tests
           command: |
             cd api
             npm run test:ci || npm run test:ci --if-present
 
-      # Install SonarScanner
+      # Step 6: Install SonarScanner
       - run:
           name: Install SonarScanner
           command: |
@@ -60,7 +61,7 @@ jobs:
             echo 'export PATH="$PWD/sonar-scanner/bin:$PATH"' >> $BASH_ENV
             source $BASH_ENV
 
-      # Run SonarCloud analysis
+      # Step 7: Run SonarCloud analysis
       - run:
           name: Run SonarCloud analysis
           command: |
@@ -68,10 +69,12 @@ jobs:
               -Dsonar.host.url="$SONAR_HOST_URL" \
               -Dsonar.login="$SONAR_TOKEN" \
               -Dsonar.projectKey="$CIRCLE_PROJECT_REPONAME" \
-              -Dsonar.organization="INSY7314VCcollege"
+              -Dsonar.organization="INSY7314VCcollege" 
 
 workflows:
   version: 2
   build_and_scan:
     jobs:
-      - test-and-sonar
+      - test-and-sonar:
+          context:
+            - Sonar  # <-- This is your context containing SONAR_HOST_URL and SONAR_TOKEN
