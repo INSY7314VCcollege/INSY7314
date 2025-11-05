@@ -1,54 +1,55 @@
 version: 2.1
 
-jobs:
-  test-and-sonar:
+executors:
+  node-executor:
     docker:
       - image: cimg/node:20.17
     working_directory: ~/project
+
+jobs:
+  test-and-sonar:
+    executor: node-executor
     steps:
+      # Step 1: Checkout code
       - checkout
 
-      # Install dependencies
+      # Step 2: Install frontend dependencies (adjust paths if you don't have a frontend folder)
       - restore_cache:
           keys:
             - v1-frontend-deps-{{ checksum "frontend/package-lock.json" }}
             - v1-frontend-deps-
       - run:
-          name: Install frontend deps
+          name: Install frontend dependencies
           command: |
             cd frontend
             npm ci
+
+      # Step 3: Install API dependencies (adjust paths if you don't have an API folder)
       - restore_cache:
           keys:
             - v1-api-deps-{{ checksum "api/package-lock.json" }}
             - v1-api-deps-
       - run:
-          name: Install api deps
+          name: Install API dependencies
           command: |
             cd api
             npm ci
-      - save_cache:
-          key: v1-frontend-deps-{{ checksum "frontend/package-lock.json" }}
-          paths:
-            - frontend/node_modules
-      - save_cache:
-          key: v1-api-deps-{{ checksum "api/package-lock.json" }}
-          paths:
-            - api/node_modules
 
-      # Tests with coverage
+      # Step 4: Run frontend tests
       - run:
-          name: Frontend tests
+          name: Run frontend tests
           command: |
             cd frontend
             npm run test:ci || npm run test:ci --if-present
+
+      # Step 5: Run API tests
       - run:
-          name: API tests
+          name: Run API tests
           command: |
             cd api
             npm run test:ci || npm run test:ci --if-present
 
-      # Install SonarScanner CLI
+      # Step 6: Install SonarScanner
       - run:
           name: Install SonarScanner
           command: |
@@ -60,25 +61,20 @@ jobs:
             echo 'export PATH="$PWD/sonar-scanner/bin:$PATH"' >> $BASH_ENV
             source $BASH_ENV
 
-      # Run analysis; enrich with PR info if present
+      # Step 7: Run SonarCloud analysis
       - run:
-          name: SonarQube analysis
+          name: Run SonarCloud analysis
           command: |
-            EXTRA_ARGS=""
-            if [ -n "$CIRCLE_PULL_REQUEST" ]; then
-              PR_NUMBER=$(echo "$CIRCLE_PULL_REQUEST" | awk -F/ '{print $NF}')
-              EXTRA_ARGS="$EXTRA_ARGS -Dsonar.pullrequest.key=$PR_NUMBER \
-                -Dsonar.pullrequest.branch=$CIRCLE_BRANCH \
-                -Dsonar.pullrequest.base=main"
-            fi
-
             sonar-scanner \
               -Dsonar.host.url="$SONAR_HOST_URL" \
               -Dsonar.login="$SONAR_TOKEN" \
-              $EXTRA_ARGS
+              -Dsonar.projectKey="$CIRCLE_PROJECT_REPONAME" \
+              -Dsonar.organization="myorg"  # Replace 'myorg' with your SonarCloud organization name
 
 workflows:
   version: 2
   build_and_scan:
     jobs:
-      - test-and-sonar
+      - test-and-sonar:
+          context:
+            - Sonar  # <-- This is your context containing SONAR_HOST_URL and SONAR_TOKEN
