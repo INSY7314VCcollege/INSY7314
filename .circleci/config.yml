@@ -1,5 +1,8 @@
 version: 2.1
 
+orbs:
+  sonarcloud: sonarsource/sonarcloud@2.0.0   # official orb
+
 executors:
   node-executor:
     docker:
@@ -7,61 +10,32 @@ executors:
     working_directory: ~/project
 
 jobs:
-  test-and-sonar:
+  build_and_test:
     executor: node-executor
     steps:
       - checkout
 
-      # Install deps if folders exist (safe for any layout)
+      # install deps if those folders exist
       - run:
-          name: Install dependencies (if present)
+          name: Install deps
           command: |
-            if [ -f frontend/package.json ]; then cd frontend && npm ci; cd ..; else echo "no frontend"; fi
-            if [ -f api/package.json ]; then cd api && npm ci; cd ..; else echo "no api"; fi
+            if [ -f frontend/package.json ]; then cd frontend && npm ci; cd ..; fi
+            if [ -f api/package.json ]; then cd api && npm ci; cd ..; fi
 
-      # Run tests with coverage if scripts exist
+      # run tests (soft-fail to not block scan if tests are missing)
       - run:
-          name: Run tests (if present)
+          name: Run tests
           command: |
             if [ -f frontend/package.json ]; then cd frontend && (npm run test:ci || npm test || true); cd ..; fi
             if [ -f api/package.json ]; then cd api && (npm run test:ci || npm test || true); cd ..; fi
-
-      # Install SonarScanner CLI
-      - run:
-          name: Install SonarScanner
-          command: |
-            SCAN_VERSION="5.0.1.3006"
-            curl -fsSL -o scanner.zip "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-${SCAN_VERSION}-linux.zip"
-            unzip -q scanner.zip
-            mv "sonar-scanner-${SCAN_VERSION}-linux" sonar-scanner
-            echo 'export PATH="$PWD/sonar-scanner/bin:$PATH"' >> $BASH_ENV
-            source $BASH_ENV
-
-      # Confirm Sonar env vars exist (from your CircleCI context/project vars)
-      - run:
-          name: Check Sonar envs present
-          command: |
-            test -n "$SONAR_HOST_URL" || (echo "SONAR_HOST_URL missing"; exit 1)
-            test -n "$SONAR_TOKEN" || (echo "SONAR_TOKEN missing"; exit 1)
-            echo "Sonar envs detected."
-
-      # Run analysis (works for SonarCloud or self-hosted)
-      - run:
-          name: Run Sonar analysis
-          command: |
-            EXTRA=""
-            if [ -n "$SONAR_ORG" ]; then EXTRA="$EXTRA -Dsonar.organization=$SONAR_ORG"; fi
-            if [ -z "$SONAR_PROJECT_KEY" ]; then SONAR_PROJECT_KEY="$CIRCLE_PROJECT_REPONAME"; fi
-            sonar-scanner \
-              -Dsonar.host.url="$SONAR_HOST_URL" \
-              -Dsonar.login="$SONAR_TOKEN" \
-              -Dsonar.projectKey="$SONAR_PROJECT_KEY" \
-              $EXTRA
 
 workflows:
   version: 2
   build_and_scan:
     jobs:
-      - test-and-sonar:
+      - build_and_test
+      - sonarcloud/scan:
+          requires:
+            - build_and_test
           context:
-            - INSY7314VCcollege  
+            - INSY7314VCcollege   
