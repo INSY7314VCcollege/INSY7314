@@ -1,7 +1,7 @@
 version: 2.1
 
 orbs:
-  sonarcloud: sonarsource/sonarcloud@2.0.0   # official orb
+  sonarcloud: sonarsource/sonarcloud@2.0.0
 
 executors:
   node-executor:
@@ -14,20 +14,16 @@ jobs:
     executor: node-executor
     steps:
       - checkout
-
-      # install deps if those folders exist
       - run:
-          name: Install deps
+          name: Install dependencies
           command: |
-            if [ -f frontend/package.json ]; then cd frontend && npm ci; cd ..; fi
-            if [ -f api/package.json ]; then cd api && npm ci; cd ..; fi
-
-      # run tests (soft-fail to not block scan if tests are missing)
+            if [ -f frontend/package.json ]; then cd frontend && npm ci && cd ..; fi
+            if [ -f api/package.json ]; then cd api && npm ci && cd ..; fi
       - run:
-          name: Run tests
+          name: Run tests (optional)
           command: |
-            if [ -f frontend/package.json ]; then cd frontend && (npm run test:ci || npm test || true); cd ..; fi
-            if [ -f api/package.json ]; then cd api && (npm run test:ci || npm test || true); cd ..; fi
+            if [ -f frontend/package.json ]; then cd frontend && (npm run test:ci || npm test || true) && cd ..; fi
+            if [ -f api/package.json ]; then cd api && (npm run test:ci || npm test || true) && cd ..; fi
 
 workflows:
   version: 2
@@ -38,4 +34,4 @@ workflows:
           requires:
             - build_and_test
           context:
-            - INSY7314VCcollege   
+            - INSY7314VCollege
