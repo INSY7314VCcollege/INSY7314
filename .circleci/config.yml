@@ -60,5 +60,5 @@ workflows:
       - sonar_scan:
           requires:
             - build_and_test
-          # Keep this ONLY if you actually created a Context named "Sonar"
+         
           context: Sonar
