@@ -12,24 +12,43 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Show repo contents
-          command: ls -la
-      - run:
-          name: Install frontend deps (if present)
+          name: Install dependencies
           command: |
             if [ -f frontend/package.json ]; then cd frontend && npm ci && cd ..; fi
-      - run:
-          name: Install API deps (if present)
-          command: |
             if [ -f api/package.json ]; then cd api && npm ci && cd ..; fi
       - run:
           name: Run tests (soft fail if none)
           command: |
             if [ -f frontend/package.json ]; then cd frontend && (npm run test:ci || npm test || true) && cd ..; fi
             if [ -f api/package.json ]; then cd api && (npm run test:ci || npm test || true) && cd ..; fi
+      - persist_to_workspace:
+          root: .
+          paths:
+            - .
+
+  sonar_scan:
+    docker:
+      - image: sonarsource/sonar-scanner-cli:5.0.1
+    working_directory: ~/project
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: Run SonarCloud analysis
+          command: |
+            : "${SONAR_HOST_URL:=https://sonarcloud.io}"
+            test -n "$SONAR_TOKEN" && test -n "$SONAR_ORG" && test -n "$SONAR_PROJECT_KEY"
+            sonar-scanner \
+              -Dsonar.host.url="$SONAR_HOST_URL" \
+              -Dsonar.login="$SONAR_TOKEN" \
+              -Dsonar.organization="$SONAR_ORG" \
+              -Dsonar.projectKey="$SONAR_PROJECT_KEY"
 
 workflows:
   version: 2
-  build_only:
+  build_and_scan:
     jobs:
       - build_and_test
+      - sonar_scan:
+          requires:
+            - build_and_test
