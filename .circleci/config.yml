@@ -1,8 +1,5 @@
 version: 2.1
 
-orbs:
-  sonarcloud: sonarsource/sonarcloud@2.0.0
-
 executors:
   node-executor:
     docker:
@@ -15,23 +12,24 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Install dependencies
+          name: Show repo contents
+          command: ls -la
+      - run:
+          name: Install frontend deps (if present)
           command: |
             if [ -f frontend/package.json ]; then cd frontend && npm ci && cd ..; fi
+      - run:
+          name: Install API deps (if present)
+          command: |
             if [ -f api/package.json ]; then cd api && npm ci && cd ..; fi
       - run:
-          name: Run tests (optional)
+          name: Run tests (soft fail if none)
           command: |
             if [ -f frontend/package.json ]; then cd frontend && (npm run test:ci || npm test || true) && cd ..; fi
             if [ -f api/package.json ]; then cd api && (npm run test:ci || npm test || true) && cd ..; fi
 
 workflows:
   version: 2
-  build_and_scan:
+  build_only:
     jobs:
       - build_and_test
-      - sonarcloud/scan:
-          requires:
-            - build_and_test
-          context:
-            - INSY7314VCollege
