@@ -31,13 +31,25 @@ jobs:
       - image: sonarsource/sonar-scanner-cli:5.0.1
     working_directory: ~/project
     steps:
+      # Option A: use the workspace produced by build_and_test
       - attach_workspace:
-          at: .
+          at: ~/project
+
+      # Option B (alternative): you can replace the attach_workspace above with:
+      # - checkout
+
+      - run:
+          name: Debug Sonar env vars
+          command: |
+            echo "SONAR_HOST_URL=${SONAR_HOST_URL}"
+            echo "SONAR_ORG=${SONAR_ORG}"
+            echo "SONAR_PROJECT_KEY=${SONAR_PROJECT_KEY}"
+            test -n "$SONAR_TOKEN" && test -n "$SONAR_ORG" && test -n "$SONAR_PROJECT_KEY"
+
       - run:
           name: Run SonarCloud analysis
           command: |
             : "${SONAR_HOST_URL:=https://sonarcloud.io}"
-            test -n "$SONAR_TOKEN" && test -n "$SONAR_ORG" && test -n "$SONAR_PROJECT_KEY"
             sonar-scanner \
               -Dsonar.host.url="$SONAR_HOST_URL" \
               -Dsonar.login="$SONAR_TOKEN" \
@@ -52,3 +64,4 @@ workflows:
       - sonar_scan:
           requires:
             - build_and_test
+          context: Sonar
