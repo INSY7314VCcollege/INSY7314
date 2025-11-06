@@ -76,5 +76,5 @@ workflows:
   build_and_scan:
     jobs:
       - test-and-sonar:
-          context:
-            - Sonar  # <-- This is your context containing SONAR_HOST_URL and SONAR_TOKEN
+                    context:
+            - INSY7314VCcollege
